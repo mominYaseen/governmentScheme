@@ -17,6 +17,10 @@ import java.util.Map;
 @Slf4j
 public class SchemeMatchingService {
 
+    /** Max schemes returned per category; relevance-only ordering made many prompts look identical — strength-first sort below fixes that. */
+    private static final int MAX_ELIGIBLE_RETURN = 12;
+    private static final int MAX_NEAR_MISS_RETURN = 6;
+
     private final SchemeRepository schemeRepository;
     private final EligibilityEngineService eligibilityEngine;
     private final SchemeRelevanceService schemeRelevanceService;
@@ -78,18 +82,19 @@ public class SchemeMatchingService {
         }
 
         if (eligible.isEmpty() && nearMiss.isEmpty() && !nonEligible.isEmpty()) {
-            nonEligible.sort((a, b) -> compareByRelevanceThenScore(a, b, relevanceRank, rankFallback));
-            int limit = Math.min(5, nonEligible.size());
+            // Prefer schemes closest to passing rules; relevance-only order matched DB/Gemini tie order and repeated every prompt.
+            nonEligible.sort((a, b) -> compareByMatchStrengthThenRelevance(a, b, relevanceRank, rankFallback));
+            int limit = Math.min(MAX_NEAR_MISS_RETURN, nonEligible.size());
             nearMiss.addAll(nonEligible.subList(0, limit));
         }
 
-        eligible.sort((a, b) -> compareByRelevanceThenPassedRules(a, b, relevanceRank, rankFallback));
+        eligible.sort((a, b) -> compareByMatchStrengthThenRelevance(a, b, relevanceRank, rankFallback));
 
-        nearMiss.sort((a, b) -> compareByRelevanceThenScore(a, b, relevanceRank, rankFallback));
+        nearMiss.sort((a, b) -> compareByMatchStrengthThenRelevance(a, b, relevanceRank, rankFallback));
 
         List<MatchedScheme> result = new ArrayList<>();
-        result.addAll(eligible.stream().limit(5).toList());
-        result.addAll(nearMiss.stream().limit(3).toList());
+        result.addAll(eligible.stream().limit(MAX_ELIGIBLE_RETURN).toList());
+        result.addAll(nearMiss.stream().limit(MAX_NEAR_MISS_RETURN).toList());
 
         log.debug("Matched {} eligible and {} near-miss schemes for profile: {}",
                 eligible.size(), nearMiss.size(), profile.getOccupation());
@@ -97,27 +102,24 @@ public class SchemeMatchingService {
         return result;
     }
 
-    private static int compareByRelevanceThenPassedRules(MatchedScheme a, MatchedScheme b,
-                                                         Map<String, Integer> relevanceRank, int rankFallback) {
+    /**
+     * Rule-engine strength first so different profiles surface different schemes; LLM rank is a tie-breaker only.
+     */
+    private static int compareByMatchStrengthThenRelevance(MatchedScheme a, MatchedScheme b,
+                                                             Map<String, Integer> relevanceRank, int rankFallback) {
+        int cmp = Double.compare(b.getMatchResult().getEligibilityScore(), a.getMatchResult().getEligibilityScore());
+        if (cmp != 0) {
+            return cmp;
+        }
+        cmp = Integer.compare(b.getMatchResult().getPassedRules().size(), a.getMatchResult().getPassedRules().size());
+        if (cmp != 0) {
+            return cmp;
+        }
         int ra = relevanceRank.getOrDefault(a.getScheme().getId(), rankFallback);
         int rb = relevanceRank.getOrDefault(b.getScheme().getId(), rankFallback);
         if (ra != rb) {
             return Integer.compare(ra, rb);
         }
-        return Integer.compare(
-                b.getMatchResult().getPassedRules().size(),
-                a.getMatchResult().getPassedRules().size());
-    }
-
-    private static int compareByRelevanceThenScore(MatchedScheme a, MatchedScheme b,
-                                                   Map<String, Integer> relevanceRank, int rankFallback) {
-        int ra = relevanceRank.getOrDefault(a.getScheme().getId(), rankFallback);
-        int rb = relevanceRank.getOrDefault(b.getScheme().getId(), rankFallback);
-        if (ra != rb) {
-            return Integer.compare(ra, rb);
-        }
-        return Double.compare(
-                b.getMatchResult().getEligibilityScore(),
-                a.getMatchResult().getEligibilityScore());
+        return a.getScheme().getId().compareTo(b.getScheme().getId());
     }
 }

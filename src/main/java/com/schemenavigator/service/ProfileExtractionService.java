@@ -276,28 +276,31 @@ public class ProfileExtractionService {
         builder.rawInput(input);
         builder.detectedLanguage("en");
 
-        if (lower.contains("farmer") || lower.contains("kisan") || lower.contains("krishak") || lower.contains("kheti")) {
+        if (lower.contains("farmer") || lower.contains("kisan") || lower.contains("krishak") || lower.contains("kheti")
+                || lower.contains("किसान") || lower.contains("खेती")) {
             builder.occupation("farmer");
             builder.isFarmer(true);
-        } else if (lower.contains("student") || lower.contains("padhai") || lower.contains("college") || lower.contains("school")) {
+        } else if (lower.contains("student") || lower.contains("padhai") || lower.contains("college") || lower.contains("school")
+                || lower.contains("छात्र") || lower.contains("छात्रा") || lower.contains("कॉलेज") || lower.contains("طالب")) {
             builder.occupation("student");
             builder.isStudent(true);
-        } else if (lower.contains("vendor") || lower.contains("hawker") || lower.contains("dukaan")) {
+        } else if (lower.contains("vendor") || lower.contains("hawker") || lower.contains("dukaan")
+                || lower.contains("ठेले") || lower.contains("ठेला") || lower.contains("रेहड़ी") || lower.contains("پٹری")) {
             builder.occupation("vendor");
         } else if (lower.contains("labour") || lower.contains("mazdoor")) {
             builder.occupation("labourer");
         }
 
-        if (lower.contains("lakh") || lower.contains("lac")) {
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile("(\\d+\\.?\\d*)\\s*(lakh|lac)");
-            java.util.regex.Matcher m = p.matcher(lower);
-            if (m.find()) {
-                try {
-                    double lakhs = Double.parseDouble(m.group(1));
-                    builder.incomeAnnual((long) (lakhs * 100000));
-                } catch (NumberFormatException ignored) {
-                    // ignore
-                }
+        // Latin "lakh/lac" plus Hindi लाख and Urdu لاکھ (often typed with Western digits: "1.5 लाख")
+        java.util.regex.Pattern lakhPattern = java.util.regex.Pattern.compile(
+                "(\\d+\\.?\\d*)\\s*(lakh|lac|लाख|لاکھ)", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher lakhMatcher = lakhPattern.matcher(lower);
+        if (lakhMatcher.find()) {
+            try {
+                double lakhs = Double.parseDouble(lakhMatcher.group(1));
+                builder.incomeAnnual((long) (lakhs * 100_000L));
+            } catch (NumberFormatException ignored) {
+                // ignore
             }
         }
 
