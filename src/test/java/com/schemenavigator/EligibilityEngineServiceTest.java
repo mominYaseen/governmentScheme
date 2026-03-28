@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,7 +30,7 @@ class EligibilityEngineServiceTest {
 
         EligibilityRule occ = rule(scheme, "occupation", "EQUALS", "farmer", null, null, true, "not farmer");
         EligibilityRule inc = rule(scheme, "income_annual", "LESS_THAN_OR_EQUAL", null, BigDecimal.valueOf(200_000), null, true, "income too high");
-        scheme.setEligibilityRules(new ArrayList<>(List.of(occ, inc)));
+        scheme.setEligibilityRules(new LinkedHashSet<>(List.of(occ, inc)));
 
         UserProfile profile = UserProfile.builder()
                 .occupation("farmer")
@@ -50,7 +50,7 @@ class EligibilityEngineServiceTest {
 
         EligibilityRule occ = rule(scheme, "occupation", "EQUALS", "farmer", null, null, true, "not farmer");
         EligibilityRule inc = rule(scheme, "income_annual", "LESS_THAN_OR_EQUAL", null, BigDecimal.valueOf(200_000), null, true, "income too high");
-        scheme.setEligibilityRules(new ArrayList<>(List.of(occ, inc)));
+        scheme.setEligibilityRules(new LinkedHashSet<>(List.of(occ, inc)));
 
         UserProfile profile = UserProfile.builder()
                 .occupation("farmer")
@@ -67,7 +67,7 @@ class EligibilityEngineServiceTest {
         Scheme scheme = new Scheme();
         scheme.setId("PM-SVANidhi");
         EligibilityRule r = rule(scheme, "occupation", "IN", "street_vendor,vendor,hawker", null, null, true, "not vendor");
-        scheme.setEligibilityRules(new ArrayList<>(List.of(r)));
+        scheme.setEligibilityRules(new LinkedHashSet<>(List.of(r)));
 
         UserProfile profile = UserProfile.builder().occupation("vendor").build();
         MatchResult result = engine.evaluate(profile, scheme);
@@ -79,7 +79,7 @@ class EligibilityEngineServiceTest {
         Scheme scheme = new Scheme();
         scheme.setId("JKEDI-LOAN");
         EligibilityRule r = rule(scheme, "state", "EQUALS", "JK", null, null, true, "not JK");
-        scheme.setEligibilityRules(new ArrayList<>(List.of(r)));
+        scheme.setEligibilityRules(new LinkedHashSet<>(List.of(r)));
 
         UserProfile ok = UserProfile.builder().state("JK").build();
         assertTrue(engine.evaluate(ok, scheme).isEligible());

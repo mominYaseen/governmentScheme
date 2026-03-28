@@ -1,21 +1,13 @@
 package com.schemenavigator.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.schemenavigator.config.AppConfig;
 import com.schemenavigator.model.MatchedScheme;
 import com.schemenavigator.model.SchemeDocument;
 import com.schemenavigator.model.UserProfile;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,28 +19,34 @@ public class LlmExplanationService {
             You are a friendly and empathetic government scheme advisor helping Indian citizens,
             especially from rural and semi-urban areas of Jammu and Kashmir.
 
-            Explain eligibility results in simple, warm, encouraging language.
-            Avoid jargon. Be specific and actionable.
-            Keep explanations under 150 words per scheme.
+            The user chose a RESPONSE LANGUAGE (field "Language to respond in" in the user message).
+            You must write ALL human-readable strings in that language so the UI can show a fully localized experience.
 
-            Always respond in the language specified. Language codes:
+            Language codes:
             - en: English
-            - hi: Hindi in Devanagari script
-            - ur: Urdu in Nastaliq script
-            - ks: Kashmiri (use Hindi if Kashmiri is not possible)
+            - hi: Hindi (Devanagari)
+            - ur: Urdu (Nastaliq / Arabic script)
+            - ks: Kashmiri (use Hindi in Devanagari if Kashmiri is difficult)
 
-            Always keep scheme names, URLs, and document names in English even when responding in other languages.
+            Translation rules:
+            - scheme_display_name: natural title in the response language (you may add the short English acronym in parentheses if helpful, e.g. for PM-KISAN).
+            - ministry_local: translate the ministry / department name.
+            - benefits_local: translate the full benefits description; keep amounts and rupee figures accurate.
+            - why_eligible, how_to_apply, why_not_eligible, what_to_do: fully in the response language.
+            - documents_needed: translate each document name for the user; keep meaning identical to the English list you were given.
+            - summary_message: in the response language.
+            - Apply URLs must stay unchanged when echoed inside how_to_apply or what_to_do (full https URL as given).
 
-            You must respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
+            Keep explanations concise (under ~180 words per scheme block).
+
+            You must respond with ONLY a valid JSON object. No markdown, no code fences.
             """;
 
-    private final RestTemplate restTemplate;
-    private final AppConfig appConfig;
+    private final GeminiLlmClient geminiLlmClient;
     private final ObjectMapper objectMapper;
 
-    public LlmExplanationService(RestTemplate restTemplate, AppConfig appConfig, ObjectMapper objectMapper) {
-        this.restTemplate = restTemplate;
-        this.appConfig = appConfig;
+    public LlmExplanationService(GeminiLlmClient geminiLlmClient, ObjectMapper objectMapper) {
+        this.geminiLlmClient = geminiLlmClient;
         this.objectMapper = objectMapper;
     }
 
@@ -57,36 +55,15 @@ public class LlmExplanationService {
         try {
             String userMessage = buildUserMessage(profile, matchedSchemes);
 
-            List<Map<String, String>> messages = new ArrayList<>();
-            messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
-            messages.add(Map.of("role", "user", "content", userMessage));
+            String jsonText = geminiLlmClient.generate(SYSTEM_PROMPT, userMessage, 4096, true);
+            if (jsonText == null || jsonText.isBlank()) {
+                throw new IllegalStateException("Empty Gemini response");
+            }
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", appConfig.getOpenAiModel());
-            requestBody.put("max_tokens", 1500);
-            requestBody.put("messages", messages);
-            requestBody.put("response_format", Map.of("type", "json_object"));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + appConfig.getOpenAiApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    appConfig.getOpenAiApiUrl(),
-                    HttpMethod.POST,
-                    entity,
-                    Map.class
-            );
-
-            List<Map<String, Object>> choices = (List<Map<String, Object>>) response.getBody().get("choices");
-            String jsonText = (String) ((Map<String, Object>) choices.get(0).get("message")).get("content");
-
-            return objectMapper.readValue(jsonText, Map.class);
+            return objectMapper.readValue(jsonText.trim(), Map.class);
 
         } catch (Exception e) {
-            log.error("LLM explanation failed: {}. Returning fallback.", e.getMessage());
+            log.error("Gemini explanation failed: {}. Returning fallback.", e.getMessage());
             return buildFallbackExplanation(matchedSchemes);
         }
     }
@@ -148,11 +125,14 @@ public class LlmExplanationService {
 
         sb.append("""
 
-                Respond with this exact JSON structure:
+                Respond with this exact JSON structure (all string values in the response language above):
                 {
                   "eligible_explanations": [
                     {
                       "scheme_id": "...",
+                      "scheme_display_name": "...",
+                      "ministry_local": "...",
+                      "benefits_local": "...",
                       "why_eligible": "...",
                       "how_to_apply": "...",
                       "documents_needed": ["...", "..."]
@@ -161,11 +141,13 @@ public class LlmExplanationService {
                   "near_miss_explanations": [
                     {
                       "scheme_id": "...",
+                      "scheme_display_name": "...",
+                      "benefits_local": "...",
                       "why_not_eligible": "...",
                       "what_to_do": "..."
                     }
                   ],
-                  "summary_message": "1-2 sentence encouraging summary in the detected language"
+                  "summary_message": "1-2 encouraging sentences in the response language"
                 }
                 """);
 
@@ -185,6 +167,9 @@ public class LlmExplanationService {
 
                 eligibleExplanations.add(Map.of(
                         "scheme_id", ms.getScheme().getId(),
+                        "scheme_display_name", "",
+                        "ministry_local", "",
+                        "benefits_local", "",
                         "why_eligible", "You meet the eligibility criteria for this scheme.",
                         "how_to_apply", ms.getScheme().getApplyProcess() != null
                                 ? ms.getScheme().getApplyProcess() : "Visit the official website to apply.",
@@ -193,6 +178,8 @@ public class LlmExplanationService {
             } else {
                 nearMissExplanations.add(Map.of(
                         "scheme_id", ms.getScheme().getId(),
+                        "scheme_display_name", "",
+                        "benefits_local", "",
                         "why_not_eligible", String.join("; ", ms.getMatchResult().getFailedRules()),
                         "what_to_do", "Review the eligibility criteria and gather required documents."
                 ));

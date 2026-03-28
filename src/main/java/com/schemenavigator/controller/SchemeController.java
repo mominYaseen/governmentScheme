@@ -11,6 +11,8 @@ import com.schemenavigator.repository.SchemeRepository;
 import com.schemenavigator.service.LlmExplanationService;
 import com.schemenavigator.service.ProfileExtractionService;
 import com.schemenavigator.service.SchemeMatchingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/schemes")
+@Tag(name = "Schemes", description = "Match government schemes from natural-language profile text")
 @Slf4j
 public class SchemeController {
 
@@ -45,6 +48,7 @@ public class SchemeController {
     }
 
     @PostMapping("/match")
+    @Operation(summary = "Match schemes", description = "Extracts structured profile (Gemini), runs eligibility rules, enriches with LLM explanations.")
     public ResponseEntity<ApiResponse<SchemeMatchResponse>> matchSchemes(
             @Valid @RequestBody UserInputRequest request) {
 
@@ -88,9 +92,9 @@ public class SchemeController {
                 }
                 eligibleDtos.add(SchemeMatchResponse.EligibleSchemeDto.builder()
                         .schemeId(s.getId())
-                        .schemeName(s.getName())
-                        .ministry(s.getMinistry())
-                        .benefits(s.getBenefits())
+                        .schemeName(firstNonBlank(stringOrEmpty(ex.get("scheme_display_name")), s.getName()))
+                        .ministry(firstNonBlank(stringOrEmpty(ex.get("ministry_local")), s.getMinistry()))
+                        .benefits(firstNonBlank(stringOrEmpty(ex.get("benefits_local")), s.getBenefits()))
                         .applyUrl(s.getApplyUrl())
                         .whyEligible(why)
                         .howToApply(how)
@@ -110,8 +114,8 @@ public class SchemeController {
                 }
                 nearMissDtos.add(SchemeMatchResponse.NearMissSchemeDto.builder()
                         .schemeId(s.getId())
-                        .schemeName(s.getName())
-                        .benefits(s.getBenefits())
+                        .schemeName(firstNonBlank(stringOrEmpty(ex.get("scheme_display_name")), s.getName()))
+                        .benefits(firstNonBlank(stringOrEmpty(ex.get("benefits_local")), s.getBenefits()))
                         .whyNotEligible(whyNot)
                         .whatToDo(whatToDo)
                         .eligibilityScore(ms.getMatchResult().getEligibilityScore())
@@ -168,6 +172,13 @@ public class SchemeController {
 
     private String stringOrEmpty(Object o) {
         return o == null ? "" : o.toString();
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred;
+        }
+        return fallback != null ? fallback : "";
     }
 
     private List<String> documentNames(Scheme s) {

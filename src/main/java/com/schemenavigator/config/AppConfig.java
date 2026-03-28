@@ -2,7 +2,6 @@ package com.schemenavigator.config;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,19 +11,19 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class AppConfig {
 
-    @Value("${openai.api.key}")
-    private String openAiApiKey;
+    @Value("${gemini.api.key}")
+    private String geminiApiKey;
 
-    @Value("${openai.api.url}")
-    private String openAiApiUrl;
+    @Value("${gemini.api.base-url}")
+    private String geminiApiBaseUrl;
 
-    @Value("${openai.model}")
-    private String openAiModel;
+    @Value("${gemini.model}")
+    private String geminiModel;
 
-    @Value("${openai.max-tokens:1000}")
-    private int maxTokens;
+    @Value("${gemini.max-output-tokens:1000}")
+    private int maxOutputTokensDefault;
 
-    @Value("${openai.timeout-seconds:30}")
+    @Value("${gemini.timeout-seconds:30}")
     private int timeoutSeconds;
 
     @Bean
@@ -38,23 +37,22 @@ public class AppConfig {
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
-    public String getOpenAiApiKey() {
-        return openAiApiKey;
+    public String getGeminiApiKey() {
+        return geminiApiKey;
     }
 
-    public String getOpenAiApiUrl() {
-        return openAiApiUrl;
+    public String getGeminiApiBaseUrl() {
+        return geminiApiBaseUrl;
     }
 
-    public String getOpenAiModel() {
-        return openAiModel;
+    public String getGeminiModel() {
+        return geminiModel;
     }
 
-    public int getMaxTokens() {
-        return maxTokens;
+    public int getMaxOutputTokensDefault() {
+        return maxOutputTokensDefault;
     }
 }

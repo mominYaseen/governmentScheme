@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 @Service
@@ -21,7 +22,7 @@ public class EligibilityEngineService {
         List<String> skippedRules = new ArrayList<>();
         int mandatoryRuleCount = 0;
 
-        List<EligibilityRule> rules = scheme.getEligibilityRules();
+        Collection<EligibilityRule> rules = scheme.getEligibilityRules();
         if (rules == null || rules.isEmpty()) {
             return MatchResult.builder()
                     .eligible(true)

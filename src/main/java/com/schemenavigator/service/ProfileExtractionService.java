@@ -1,20 +1,10 @@
 package com.schemenavigator.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.schemenavigator.config.AppConfig;
 import com.schemenavigator.model.UserProfile;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -52,17 +42,14 @@ public class ProfileExtractionService {
             - is_student must be true whenever occupation is student or user mentions studying
             """;
 
-    private final RestTemplate restTemplate;
-    private final AppConfig appConfig;
+    private final GeminiLlmClient geminiLlmClient;
     private final ObjectMapper objectMapper;
 
-    public ProfileExtractionService(RestTemplate restTemplate, AppConfig appConfig, ObjectMapper objectMapper) {
-        this.restTemplate = restTemplate;
-        this.appConfig = appConfig;
+    public ProfileExtractionService(GeminiLlmClient geminiLlmClient, ObjectMapper objectMapper) {
+        this.geminiLlmClient = geminiLlmClient;
         this.objectMapper = objectMapper;
     }
 
-    @SuppressWarnings("unchecked")
     public UserProfile extractProfile(String userInput) {
         try {
             String sanitized = userInput.trim();
@@ -70,37 +57,15 @@ public class ProfileExtractionService {
                 sanitized = sanitized.substring(0, 2000);
             }
 
-            List<Map<String, String>> messages = new ArrayList<>();
-            messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
-            messages.add(Map.of("role", "user", "content", sanitized));
+            String jsonText = geminiLlmClient.generate(SYSTEM_PROMPT, sanitized, 500, true);
+            if (jsonText == null || jsonText.isBlank()) {
+                throw new IllegalStateException("Empty Gemini response");
+            }
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", appConfig.getOpenAiModel());
-            requestBody.put("max_tokens", 500);
-            requestBody.put("messages", messages);
-            requestBody.put("response_format", Map.of("type", "json_object"));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + appConfig.getOpenAiApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    appConfig.getOpenAiApiUrl(),
-                    HttpMethod.POST,
-                    entity,
-                    Map.class
-            );
-
-            List<Map<String, Object>> choices = (List<Map<String, Object>>) response.getBody().get("choices");
-            Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-            String jsonText = (String) message.get("content");
-
-            return parseProfileFromJson(jsonText, userInput);
+            return parseProfileFromJson(jsonText.trim(), userInput);
 
         } catch (Exception e) {
-            log.error("OpenAI profile extraction failed: {}. Falling back to keyword extraction.", e.getMessage());
+            log.error("Gemini profile extraction failed: {}. Falling back to keyword extraction.", e.getMessage());
             return keywordFallbackExtraction(userInput);
         }
     }

@@ -1,19 +1,14 @@
 package com.schemenavigator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.schemenavigator.config.AppConfig;
 import com.schemenavigator.model.UserProfile;
+import com.schemenavigator.service.GeminiLlmClient;
 import com.schemenavigator.service.ProfileExtractionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpMethod;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -23,26 +18,20 @@ import static org.mockito.Mockito.when;
 class ProfileExtractionServiceTest {
 
     @Mock
-    private RestTemplate restTemplate;
-
-    @Mock
-    private AppConfig appConfig;
+    private GeminiLlmClient geminiLlmClient;
 
     private ProfileExtractionService service;
 
     @BeforeEach
     void setUp() {
         ObjectMapper mapper = new ObjectMapper();
-        when(appConfig.getOpenAiModel()).thenReturn("gpt-4o");
-        when(appConfig.getOpenAiApiUrl()).thenReturn("https://api.openai.com/v1/chat/completions");
-        when(appConfig.getOpenAiApiKey()).thenReturn("test-key");
-        service = new ProfileExtractionService(restTemplate, appConfig, mapper);
+        service = new ProfileExtractionService(geminiLlmClient, mapper);
     }
 
     @Test
-    void fallsBackToKeywordsWhenOpenAiFails() {
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
-                .thenThrow(new RestClientException("down"));
+    void fallsBackToKeywordsWhenGeminiFails() {
+        when(geminiLlmClient.generate(anyString(), anyString(), anyInt(), anyBoolean()))
+                .thenThrow(new RuntimeException("down"));
 
         UserProfile p = service.extractProfile("I am a farmer in Srinagar earning 1 lakh per year");
 

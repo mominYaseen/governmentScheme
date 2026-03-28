@@ -3,8 +3,8 @@ package com.schemenavigator.model;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "schemes")
@@ -38,10 +38,10 @@ public class Scheme {
     @OneToMany(mappedBy = "scheme", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private List<EligibilityRule> eligibilityRules = new ArrayList<>();
+    private Set<EligibilityRule> eligibilityRules = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "scheme", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private List<SchemeDocument> documents = new ArrayList<>();
+    private Set<SchemeDocument> documents = new LinkedHashSet<>();
 }
