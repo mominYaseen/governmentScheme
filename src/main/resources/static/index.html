@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"/>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <title>Government Scheme Navigator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 700: '#0f766e', 800: '#115e59', 900: '#134e4a' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <header class="bg-brand-800 text-white shadow">
+    <div class="max-w-3xl mx-auto px-4 py-4">
+      <h1 class="text-xl font-semibold tracking-tight">Government Scheme Navigator</h1>
+      <p class="text-sm text-teal-100 mt-1">Discover schemes you may qualify for — especially for J&amp;K residents. Describe yourself in your own words.</p>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-24">
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+      <label for="userInput" class="block text-sm font-medium text-slate-700">Your details</label>
+      <textarea id="userInput" rows="5" maxlength="2000"
+        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-brand-700 focus:border-brand-700 outline-none resize-y min-h-[120px]"
+        placeholder="Example: I am 28, female, live in Baramulla, J&amp;K. BPL card holder. I sell vegetables on the street. Family income about 1.5 lakh per year."></textarea>
+      <div class="flex flex-wrap gap-2 items-center">
+        <span class="text-xs text-slate-500" id="charCount">0 / 2000</span>
+        <button type="button" id="btnVoice"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-800 text-sm font-medium border border-slate-200 active:bg-slate-200">
+          <span aria-hidden="true">🎤</span> Voice input
+        </button>
+        <span id="voiceStatus" class="text-xs text-slate-500 hidden"></span>
+      </div>
+      <div>
+        <label for="language" class="block text-sm font-medium text-slate-700 mb-1">Response language</label>
+        <select id="language" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-base bg-white">
+          <option value="">Auto-detect</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi (हिंदी)</option>
+          <option value="ur">Urdu</option>
+          <option value="ks">Kashmiri</option>
+        </select>
+      </div>
+      <button type="button" id="btnMatch"
+        class="w-full py-3 rounded-lg bg-brand-700 hover:bg-brand-800 text-white font-semibold text-base shadow active:scale-[0.99] transition">
+        Find schemes for me
+      </button>
+      <p id="errorMsg" class="text-sm text-red-600 hidden"></p>
+    </section>
+
+    <section id="loading" class="hidden text-center py-8 text-slate-600 text-sm">
+      Analyzing your profile and matching schemes…
+    </section>
+
+    <section id="summaryBox" class="hidden bg-teal-50 border border-teal-200 rounded-xl p-4">
+      <h2 class="text-sm font-semibold text-brand-900 uppercase tracking-wide">Summary</h2>
+      <p id="summaryText" class="text-slate-800 mt-2 text-base leading-relaxed"></p>
+      <p id="metaLine" class="text-xs text-slate-500 mt-2"></p>
+    </section>
+
+    <section id="profileBox" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+      <h2 class="text-lg font-semibold text-slate-800">Extracted profile</h2>
+      <dl id="profileDl" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm"></dl>
+    </section>
+
+    <section id="eligibleSection" class="hidden space-y-3">
+      <h2 class="text-lg font-semibold text-slate-800">You may be eligible</h2>
+      <div id="eligibleList" class="space-y-3"></div>
+    </section>
+
+    <section id="nearSection" class="hidden space-y-3">
+      <h2 class="text-lg font-semibold text-slate-800">Almost eligible</h2>
+      <p class="text-sm text-slate-600">These schemes need a few more criteria — see what you can work toward.</p>
+      <div id="nearList" class="space-y-3"></div>
+    </section>
+  </main>
+
+  <footer class="max-w-3xl mx-auto px-4 py-6 text-center text-xs text-slate-500">
+    For official rules and deadlines, always confirm on the ministry or scheme website. This tool is a guide only.
+  </footer>
+
+  <script>
+    (function () {
+      var input = document.getElementById('userInput');
+      var charCount = document.getElementById('charCount');
+      var btnMatch = document.getElementById('btnMatch');
+      var btnVoice = document.getElementById('btnVoice');
+      var voiceStatus = document.getElementById('voiceStatus');
+      var language = document.getElementById('language');
+      var errorMsg = document.getElementById('errorMsg');
+      var loading = document.getElementById('loading');
+      var summaryBox = document.getElementById('summaryBox');
+      var summaryText = document.getElementById('summaryText');
+      var metaLine = document.getElementById('metaLine');
+      var profileBox = document.getElementById('profileBox');
+      var profileDl = document.getElementById('profileDl');
+      var eligibleSection = document.getElementById('eligibleSection');
+      var eligibleList = document.getElementById('eligibleList');
+      var nearSection = document.getElementById('nearSection');
+      var nearList = document.getElementById('nearList');
+
+      function esc(s) {
+        if (s == null) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      input.addEventListener('input', function () {
+        charCount.textContent = input.value.length + ' / 2000';
+      });
+      charCount.textContent = input.value.length + ' / 2000';
+
+      var recognition = null;
+      if ('webkitSpeechRecognition' in window) {
+        recognition = new webkitSpeechRecognition();
+      } else if ('SpeechRecognition' in window) {
+        recognition = new SpeechRecognition();
+      }
+
+      if (recognition) {
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-IN';
+
+        btnVoice.addEventListener('click', function () {
+          errorMsg.classList.add('hidden');
+          voiceStatus.classList.remove('hidden');
+          voiceStatus.textContent = 'Listening… speak now';
+          try {
+            recognition.start();
+          } catch (e) {
+            voiceStatus.textContent = 'Could not start microphone';
+          }
+        });
+
+        recognition.onresult = function (ev) {
+          var t = '';
+          for (var i = ev.resultIndex; i < ev.results.length; i++) {
+            t += ev.results[i][0].transcript;
+          }
+          if (t) {
+            input.value = (input.value ? input.value + ' ' : '') + t.trim();
+            input.dispatchEvent(new Event('input'));
+          }
+          voiceStatus.textContent = '';
+          voiceStatus.classList.add('hidden');
+        };
+
+        recognition.onerror = function () {
+          voiceStatus.textContent = 'Voice input failed — type instead';
+        };
+
+        recognition.onend = function () {
+          if (voiceStatus.textContent === 'Listening… speak now') {
+            voiceStatus.textContent = '';
+            voiceStatus.classList.add('hidden');
+          }
+        };
+      } else {
+        btnVoice.disabled = true;
+        btnVoice.classList.add('opacity-50', 'cursor-not-allowed');
+        btnVoice.title = 'Voice not supported in this browser';
+      }
+
+      function renderProfile(p) {
+        if (!p) return;
+        var rows = [
+          ['Occupation', p.occupation],
+          ['Annual income (₹)', p.incomeAnnual],
+          ['Location', p.location],
+          ['State', p.state],
+          ['Gender', p.gender],
+          ['Age', p.age],
+          ['Caste category', p.casteCategory],
+          ['BPL card', p.bplCard],
+          ['Farmer', p.isFarmer],
+          ['Student', p.isStudent],
+          ['Language', p.detectedLanguage]
+        ];
+        profileDl.innerHTML = rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) {
+          return '<div class="border-b border-slate-100 pb-1"><dt class="text-slate-500">' + esc(r[0]) + '</dt><dd class="font-medium text-slate-800">' + esc(String(r[1])) + '</dd></div>';
+        }).join('');
+        profileBox.classList.remove('hidden');
+      }
+
+      function cardEligible(s) {
+        var docs = (s.documentsNeeded || []).map(function (d) { return '<li class="ml-4 list-disc">' + esc(d) + '</li>'; }).join('');
+        var rules = (s.passedRules || []).map(function (r) { return '<li class="ml-4 list-disc text-slate-600">' + esc(r) + '</li>'; }).join('');
+        return (
+          '<article class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">' +
+          '<h3 class="font-semibold text-slate-900">' + esc(s.schemeName) + '</h3>' +
+          '<p class="text-xs text-slate-500">' + esc(s.ministry || '') + '</p>' +
+          '<p class="text-sm text-slate-700">' + esc(s.benefits || '') + '</p>' +
+          '<p class="text-sm"><span class="font-medium text-brand-800">Why you may qualify:</span> ' + esc(s.whyEligible || '') + '</p>' +
+          '<p class="text-sm"><span class="font-medium text-brand-800">How to apply:</span> ' + esc(s.howToApply || '') + '</p>' +
+          (s.applyUrl ? '<p class="text-sm"><a class="text-brand-700 underline break-all" href="' + esc(s.applyUrl) + '" target="_blank" rel="noopener">Official apply link</a></p>' : '') +
+          '<div class="text-sm"><span class="font-medium">Documents:</span><ul class="mt-1">' + (docs || '<li class="text-slate-500">See official site</li>') + '</ul></div>' +
+          '<details class="text-xs text-slate-600"><summary class="cursor-pointer font-medium">Passed checks</summary><ul class="mt-1">' + (rules || '<li>—</li>') + '</ul></details>' +
+          '</article>'
+        );
+      }
+
+      function cardNear(s) {
+        return (
+          '<article class="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-2">' +
+          '<h3 class="font-semibold text-slate-900">' + esc(s.schemeName) + '</h3>' +
+          '<p class="text-sm text-slate-700">' + esc(s.benefits || '') + '</p>' +
+          '<p class="text-sm"><span class="font-medium text-amber-900">Why not yet:</span> ' + esc(s.whyNotEligible || '') + '</p>' +
+          '<p class="text-sm"><span class="font-medium text-amber-900">What you can do:</span> ' + esc(s.whatToDo || '') + '</p>' +
+          '</article>'
+        );
+      }
+
+      btnMatch.addEventListener('click', function () {
+        errorMsg.classList.add('hidden');
+        summaryBox.classList.add('hidden');
+        profileBox.classList.add('hidden');
+        eligibleSection.classList.add('hidden');
+        nearSection.classList.add('hidden');
+        eligibleList.innerHTML = '';
+        nearList.innerHTML = '';
+
+        var text = input.value.trim();
+        if (text.length < 3) {
+          errorMsg.textContent = 'Please enter at least 3 characters.';
+          errorMsg.classList.remove('hidden');
+          return;
+        }
+
+        loading.classList.remove('hidden');
+        btnMatch.disabled = true;
+
+        var body = { userInput: text };
+        var lang = language.value;
+        if (lang) body.language = lang;
+
+        fetch('/api/schemes/match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (_ref) {
+            var ok = _ref.ok;
+            var j = _ref.j;
+            loading.classList.add('hidden');
+            btnMatch.disabled = false;
+            if (!ok || !j.success) {
+              errorMsg.textContent = (j && j.error) ? j.error : 'Request failed';
+              errorMsg.classList.remove('hidden');
+              return;
+            }
+            var data = j.data;
+            summaryText.textContent = data.summaryMessage || '';
+            metaLine.textContent = 'Checked ' + (data.totalSchemesChecked || 0) + ' schemes in ' + (data.processingTimeMs || 0) + ' ms · Language: ' + (data.detectedLanguage || '—');
+            summaryBox.classList.remove('hidden');
+            renderProfile(data.userProfile);
+
+            var el = data.eligibleSchemes || [];
+            if (el.length) {
+              eligibleList.innerHTML = el.map(cardEligible).join('');
+              eligibleSection.classList.remove('hidden');
+            }
+            var nm = data.nearMissSchemes || [];
+            if (nm.length) {
+              nearList.innerHTML = nm.map(cardNear).join('');
+              nearSection.classList.remove('hidden');
+            }
+            if (!el.length && !nm.length) {
+              errorMsg.textContent = 'No matching schemes returned. Try adding income, state, occupation, or age.';
+              errorMsg.classList.remove('hidden');
+            }
+          })
+          .catch(function () {
+            loading.classList.add('hidden');
+            btnMatch.disabled = false;
+            errorMsg.textContent = 'Network error — check your connection and try again.';
+            errorMsg.classList.remove('hidden');
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
