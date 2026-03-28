@@ -1,0 +1,112 @@
+================================================================================
+SCHEME NAVIGATOR — COPY INTO POWERPOINT / GOOGLE SLIDES
+One block = one slide. Paste title + bullets into each slide.
+================================================================================
+
+SLIDE 1 — TITLE
+Title: Scheme Navigator
+Subtitle: Discover government schemes that fit you — browse, match, save, and get reminded.
+Footer: [Your name / team · Hackathon]
+
+--------------------------------------------------------------------------------
+SLIDE 2 — PROBLEM
+Title: The problem
+• Thousands of Central & State schemes — hard for citizens to navigate
+• Eligibility hidden in PDFs and long portal pages
+• People need: “What applies to me, and how do I apply?”
+
+--------------------------------------------------------------------------------
+SLIDE 3 — SOLUTION
+Title: What we built
+• Catalog: paginated schemes from a real dataset
+• Recommend: structured profile → database rules (no AI required)
+• Match: natural language + Google Gemini + eligibility engine
+• Personal list: sign in, save schemes, optional email reminders
+
+--------------------------------------------------------------------------------
+SLIDE 4 — CATALOG
+Title: Browse the catalog
+• Paginated list with clear Central / State labels
+• Categories & readable subtitles (not raw database slugs)
+• Detail view: overview, benefits, eligibility, steps, documents, apply link
+
+--------------------------------------------------------------------------------
+SLIDE 5 — RECOMMEND
+Title: Rule-based recommendation
+• User enters age, state, income, occupation flags, etc.
+• Backend matches against imported eligibility_criteria rows
+• Fast and explainable — ideal for demos and trust
+
+--------------------------------------------------------------------------------
+SLIDE 6 — AI MATCH
+Title: AI-assisted matching (Gemini)
+• User describes their situation in plain language
+• LLM extracts profile and ranks schemes; rules mark eligible vs near-miss
+• Helpful explanations with fallbacks if the model is unavailable
+
+--------------------------------------------------------------------------------
+SLIDE 7 — SAVE & REMIND
+Title: Save schemes & reminders
+• Viewing schemes without login; saving requires sign-in
+• Demo login or OAuth; data stored per user in PostgreSQL
+• Optional scheduled emails to remind users to apply
+
+--------------------------------------------------------------------------------
+SLIDE 8 — ARCHITECTURE
+Title: System architecture
+• Frontend: SPA (e.g. Vite + React) → REST API
+• Backend: Spring Boot · PostgreSQL · OpenAPI (Swagger)
+• Integrations: CSV import · Gemini API · SMTP (reminders)
+
+--------------------------------------------------------------------------------
+SLIDE 9 — TECH STACK
+Title: Technology stack
+• Java 21 · Spring Boot 3 · Spring Security · Spring Data JPA
+• PostgreSQL · schema.sql + CSV pipeline (OpenCSV)
+• springdoc-openapi · Google Gemini · Spring Mail + scheduling
+
+--------------------------------------------------------------------------------
+SLIDE 10 — DATA
+Title: Data & challenges
+• Large government-scheme style CSV → normalized tables
+• Heuristic parsing of free-text eligibility into structured rules
+• Apply URLs often missing — server can infer links from narrative text when possible
+
+--------------------------------------------------------------------------------
+SLIDE 11 — API (OPTIONAL TECH SLIDE)
+Title: Main API endpoints
+• GET /api/schemes — catalog (paginated)
+• GET /api/schemes/{id} — full detail for UI
+• POST /api/schemes/recommend — structured profile
+• POST /api/schemes/match — natural language + AI
+• /api/me/… — account & saved schemes (authenticated)
+
+--------------------------------------------------------------------------------
+SLIDE 12 — DEMO
+Title: Live demo
+1. Catalog → open one scheme → show detail
+2. Recommend with a sample profile
+3. Match with one short user story
+4. Log in → save scheme → “My saved schemes”
+
+--------------------------------------------------------------------------------
+SLIDE 13 — FUTURE
+Title: Next steps
+• Better eligibility parsing & verified apply URLs
+• Production deployment, HTTPS, hardened auth
+• More languages & accessibility
+• Admin curation tools
+
+--------------------------------------------------------------------------------
+SLIDE 14 — CLOSING
+Title: Thank you
+Subtitle: Scheme Navigator — actionable access to public schemes
+• Questions?
+
+================================================================================
+HOW TO GET A REAL .pptx
+1. Open PowerPoint → New presentation → paste each slide from this file.
+2. Or: open presentations/scheme-navigator-deck.html in Chrome → F11 fullscreen
+   to present; or Print → Save as PDF for sharing.
+3. Or: Google Slides → import outline (paste slides manually from this file).
+================================================================================
