@@ -75,6 +75,24 @@ class EligibilityEngineServiceTest {
     }
 
     @Test
+    void notEligibleWhenMandatoryFieldMissing() {
+        Scheme scheme = new Scheme();
+        scheme.setId("PM-KISAN");
+
+        EligibilityRule occ = rule(scheme, "occupation", "EQUALS", "farmer", null, null, true, "not farmer");
+        EligibilityRule inc = rule(scheme, "income_annual", "LESS_THAN_OR_EQUAL", null, BigDecimal.valueOf(200_000), null, true, "income too high");
+        scheme.setEligibilityRules(new LinkedHashSet<>(List.of(occ, inc)));
+
+        UserProfile profile = UserProfile.builder()
+                .occupation("farmer")
+                .build();
+
+        MatchResult result = engine.evaluate(profile, scheme);
+        assertFalse(result.isEligible());
+        assertFalse(result.getFailedRules().isEmpty());
+    }
+
+    @Test
     void jkStateRequired() {
         Scheme scheme = new Scheme();
         scheme.setId("JKEDI-LOAN");

@@ -39,6 +39,9 @@ public class LlmExplanationService {
 
             Keep explanations concise (under ~180 words per scheme block).
 
+            Only discuss schemes listed in the user message. Do not add schemes that were not provided.
+            Ground why_eligible / why_not_eligible in the original user message and profile fields.
+
             You must respond with ONLY a valid JSON object. No markdown, no code fences.
             """;
 
@@ -71,6 +74,10 @@ public class LlmExplanationService {
     private String buildUserMessage(UserProfile profile, List<MatchedScheme> matchedSchemes) {
         StringBuilder sb = new StringBuilder();
         sb.append("Language to respond in: ").append(profile.getDetectedLanguage()).append("\n\n");
+        if (profile.getRawInput() != null && !profile.getRawInput().isBlank()) {
+            sb.append("Original user message (tie explanations to this question; do not ignore it):\n");
+            sb.append(profile.getRawInput().trim()).append("\n\n");
+        }
         sb.append("User profile:\n");
         if (profile.getOccupation() != null) {
             sb.append("- Occupation: ").append(profile.getOccupation()).append("\n");

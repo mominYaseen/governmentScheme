@@ -26,6 +26,12 @@ public class AppConfig {
     @Value("${gemini.timeout-seconds:30}")
     private int timeoutSeconds;
 
+    @Value("${gemini.retry.max-attempts:3}")
+    private int geminiRetryMaxAttempts;
+
+    @Value("${gemini.retry.initial-delay-ms:2000}")
+    private int geminiRetryInitialDelayMs;
+
     @Bean
     public RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -54,5 +60,13 @@ public class AppConfig {
 
     public int getMaxOutputTokensDefault() {
         return maxOutputTokensDefault;
+    }
+
+    public int getGeminiRetryMaxAttempts() {
+        return Math.max(1, geminiRetryMaxAttempts);
+    }
+
+    public int getGeminiRetryInitialDelayMs() {
+        return Math.max(100, geminiRetryInitialDelayMs);
     }
 }

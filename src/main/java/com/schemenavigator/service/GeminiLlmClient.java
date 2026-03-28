@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -67,14 +68,43 @@ public class GeminiLlmClient {
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<Map> response = restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                entity,
-                Map.class
-        );
+        int maxAttempts = appConfig.getGeminiRetryMaxAttempts();
+        long initialDelayMs = appConfig.getGeminiRetryInitialDelayMs();
+        HttpStatusCodeException lastStatus = null;
 
-        return extractTextFromResponse(response.getBody());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.POST,
+                        entity,
+                        Map.class
+                );
+                return extractTextFromResponse(response.getBody());
+            } catch (HttpStatusCodeException e) {
+                lastStatus = e;
+                int code = e.getStatusCode().value();
+                boolean retryable = (code == 429 || code == 503) && attempt < maxAttempts;
+                if (!retryable) {
+                    throw e;
+                }
+                long delayMs = initialDelayMs * (1L << (attempt - 1));
+                log.warn("Gemini HTTP {} — backing off {} ms (attempt {}/{})", code, delayMs, attempt, maxAttempts);
+                sleepQuietly(delayMs);
+            }
+        }
+        if (lastStatus != null) {
+            throw lastStatus;
+        }
+        return null;
+    }
+
+    private static void sleepQuietly(long delayMs) {
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @SuppressWarnings("unchecked")

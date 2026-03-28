@@ -1,11 +1,18 @@
 package com.schemenavigator.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.schemenavigator.dto.ProfileWithSchemeRanking;
+import com.schemenavigator.model.Scheme;
 import com.schemenavigator.model.UserProfile;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -42,6 +49,41 @@ public class ProfileExtractionService {
             - is_student must be true whenever occupation is student or user mentions studying
             """;
 
+    private static final String COMBINED_SYSTEM_PROMPT = """
+            You are an assistant for an Indian government scheme eligibility checker.
+
+            From the user message, extract a structured profile AND rank every scheme id you are given by relevance to that message.
+
+            Return ONLY valid JSON (no markdown). Shape:
+            {
+              "occupation": "string or null — use one of: farmer, student, vendor, labourer, shopkeeper, government_employee, unemployed, other",
+              "income_annual": "number in rupees or null — convert lakhs to rupees, 1 lakh = 100000",
+              "location": "string or null",
+              "state": "2-letter state code or null — use JK for any J&K location like Srinagar, Jammu, Baramulla, Sopore, Anantnag, Kupwara, Pulwama, Kargil, Leh, Kathua, Udhampur",
+              "gender": "male or female or other or null",
+              "land_owned": true or false or null,
+              "caste_category": "GEN or OBC or SC or ST or null",
+              "age": number or null,
+              "bpl_card": true or false or null,
+              "is_student": true or false or null,
+              "is_farmer": true or false or null,
+              "is_disabled": true or false or null,
+              "detected_language": "en or hi or ur or ks",
+              "ranked_scheme_ids": ["...", "..."]
+            }
+
+            Profile rules:
+            - Return null for any field not clearly mentioned. Do not guess.
+            - income_annual: "1 lakh" -> 100000, "1.5 lakh" -> 150000
+            - state: J&K places -> JK
+            - is_farmer true when occupation is farmer; is_student true when student or studying
+
+            Ranking rules:
+            - ranked_scheme_ids must list every scheme id from the user message exactly once, most relevant first.
+            - Use intent: scholarships, housing, farmers, loans, vendors, women, LPG, SC/ST, entrepreneurship, J&K schemes.
+            - Never invent ids.
+            """;
+
     private final GeminiLlmClient geminiLlmClient;
     private final ObjectMapper objectMapper;
 
@@ -62,7 +104,9 @@ public class ProfileExtractionService {
                 throw new IllegalStateException("Empty Gemini response");
             }
 
-            return parseProfileFromJson(jsonText.trim(), userInput);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = objectMapper.readValue(jsonText.trim(), Map.class);
+            return parseProfileFromMap(data, userInput);
 
         } catch (Exception e) {
             log.error("Gemini profile extraction failed: {}. Falling back to keyword extraction.", e.getMessage());
@@ -70,11 +114,80 @@ public class ProfileExtractionService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private UserProfile parseProfileFromJson(String jsonText, String rawInput) {
+    /**
+     * One Gemini call: profile fields + scheme relevance order (saves a separate ranking request per match).
+     */
+    public ProfileWithSchemeRanking extractProfileAndRankSchemes(String userInput, List<Scheme> schemes) {
+        List<String> idFallback = schemes.stream().map(Scheme::getId).toList();
+        if (schemes.isEmpty()) {
+            return new ProfileWithSchemeRanking(keywordFallbackExtraction(userInput), List.of());
+        }
         try {
-            Map<String, Object> data = objectMapper.readValue(jsonText, Map.class);
+            String sanitized = userInput.trim();
+            if (sanitized.length() > 2000) {
+                sanitized = sanitized.substring(0, 2000);
+            }
+            StringBuilder catalog = new StringBuilder();
+            for (Scheme s : schemes) {
+                catalog.append("- ").append(s.getId()).append(": ").append(s.getName()).append(" — ");
+                if (s.getDescription() != null) {
+                    catalog.append(s.getDescription());
+                }
+                catalog.append("\n");
+            }
+            String userMsg = "User message:\n" + sanitized + "\n\nSchemes (include each id exactly once in ranked_scheme_ids):\n" + catalog;
 
+            String jsonText = geminiLlmClient.generate(COMBINED_SYSTEM_PROMPT, userMsg, 2048, true);
+            if (jsonText == null || jsonText.isBlank()) {
+                throw new IllegalStateException("Empty Gemini response");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = objectMapper.readValue(jsonText.trim(), Map.class);
+            UserProfile profile = parseProfileFromMap(data, userInput);
+            List<String> ranked = mergeRankingFromResponse(data.get("ranked_scheme_ids"), schemes);
+            return new ProfileWithSchemeRanking(profile, ranked);
+        } catch (Exception e) {
+            log.error("Gemini combined profile+ranking failed: {}. Falling back to keywords + default scheme order.",
+                    e.getMessage());
+            return new ProfileWithSchemeRanking(keywordFallbackExtraction(userInput), idFallback);
+        }
+    }
+
+    private List<String> mergeRankingFromResponse(Object rankedRaw, List<Scheme> schemes) {
+        List<String> fallback = schemes.stream().map(Scheme::getId).toList();
+        if (!(rankedRaw instanceof List<?> list)) {
+            return fallback;
+        }
+        List<String> ordered = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (Object o : list) {
+            if (o == null) {
+                continue;
+            }
+            String id = o.toString().trim();
+            if (!id.isEmpty() && !seen.contains(id)) {
+                seen.add(id);
+                ordered.add(id);
+            }
+        }
+        Set<String> expected = schemes.stream().map(Scheme::getId).collect(Collectors.toSet());
+        ordered.removeIf(id -> !expected.contains(id));
+        seen.clear();
+        seen.addAll(ordered);
+        for (String id : fallback) {
+            if (!seen.contains(id)) {
+                ordered.add(id);
+                seen.add(id);
+            }
+        }
+        if (ordered.size() != expected.size()) {
+            return fallback;
+        }
+        return ordered;
+    }
+
+    private UserProfile parseProfileFromMap(Map<String, Object> data, String rawInput) {
+        try {
             UserProfile.UserProfileBuilder builder = UserProfile.builder();
             builder.rawInput(rawInput);
 
@@ -152,7 +265,7 @@ public class ProfileExtractionService {
             return profile;
 
         } catch (Exception e) {
-            log.error("Failed to parse LLM JSON response: {}. Raw JSON: {}", e.getMessage(), jsonText);
+            log.error("Failed to parse LLM JSON response: {}.", e.getMessage());
             return keywordFallbackExtraction(rawInput);
         }
     }

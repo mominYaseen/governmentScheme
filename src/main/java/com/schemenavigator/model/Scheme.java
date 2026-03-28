@@ -13,9 +13,10 @@ import java.util.Set;
 @AllArgsConstructor
 public class Scheme {
     @Id
+    @Column(length = 128)
     private String id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 512)
     private String name;
 
     @Column(columnDefinition = "TEXT")
@@ -35,6 +36,21 @@ public class Scheme {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
+    @Column(length = 128)
+    private String slug;
+
+    @Column(name = "gov_level", length = 32)
+    private String govLevel;
+
+    @Column(name = "eligibility_raw", columnDefinition = "TEXT")
+    private String eligibilityRaw;
+
+    @Column(columnDefinition = "TEXT")
+    private String tags;
+
+    @Column(length = 32)
+    private String source;
+
     @OneToMany(mappedBy = "scheme", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
@@ -44,4 +60,14 @@ public class Scheme {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Set<SchemeDocument> documents = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "scheme", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<EligibilityCriteria> eligibilityCriteria = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "scheme", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<SchemeCategory> schemeCategories = new LinkedHashSet<>();
 }

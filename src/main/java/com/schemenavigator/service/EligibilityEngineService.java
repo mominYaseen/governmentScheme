@@ -42,7 +42,11 @@ public class EligibilityEngineService {
                 Object userValue = getFieldValue(profile, rule.getFieldName());
 
                 if (userValue == null) {
-                    skippedRules.add("Unknown: " + rule.getFieldName());
+                    if (Boolean.FALSE.equals(rule.getIsMandatory())) {
+                        skippedRules.add("Optional: " + rule.getFieldName() + " not provided");
+                    } else {
+                        failedRules.add(missingMandatoryMessage(rule));
+                    }
                     continue;
                 }
 
@@ -158,6 +162,12 @@ public class EligibilityEngineService {
             return n.longValue();
         }
         return Long.parseLong(value.toString());
+    }
+
+    private String missingMandatoryMessage(EligibilityRule rule) {
+        return "Missing required detail in your message: "
+                + rule.getFieldName().replace('_', ' ')
+                + ". Add it to check this scheme.";
     }
 
     private String buildPassMessage(EligibilityRule rule, Object userValue) {
